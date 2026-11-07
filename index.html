@@ -1325,6 +1325,48 @@ function vDon() {
    ${g2(fld("mod.kvoc", "Coef. temp. Voc", "%/°C", { pct: 1 }), fld("mod.kvmp", "Coef. temp. Vmp", "%/°C", { pct: 1 }))}${g2(fld("mod.tmin", "Température min", "°C"), fld("mod.tcmax", "Température cellule max", "°C"))}</div>
   <div class="card form"><div class="sec-t">Comparaison diesel</div>${g2(fld("gas", "Prix du gasoil", S.devise + "/L"), fld("lkwh", "Gasoil par kWh hydraulique", "L/kWh"))}${g2(fld("dmaint", "Entretien diesel", S.devise + "/an"), fld("dinv", "Investissement diesel", S.devise))}${fld("dvie", "Durée de vie du groupe diesel", "ans")}</div>`;
 }
+/* MUPGLOBAL SARL – émetteur des devis : chaque devis est établi au nom du titulaire de la licence (nom lu dans la clé, non modifiable). */
+const EMKEY = "mupglobal_pompe_emetteur";
+let EM = {};
+try {
+    EM = JSON.parse(localStorage.getItem(EMKEY) || "{}") || {};
+}
+catch (e) {
+    EM = {};
+}
+const EMF = [["adr", "Adresse"], ["tel", "Téléphone / WhatsApp"], ["mail", "E-mail"], ["rccm", "RCCM"], ["idnat", "Id. Nat."], ["nif", "N° impôt (NIF)"]];
+function emOk() { return typeof LIC !== "undefined" && LIC.ok && !DEMO; }
+function emName() { return emOk() ? LIC.name : "VERSION DE DÉMONSTRATION"; }
+function emLic() { return emOk() ? `licence n° ${String(LIC.serial).padStart(4, "0")}` : "version de démonstration"; }
+function emLines() { const e = EM; return [e.adr, e.tel && "Tél. " + e.tel, e.mail, e.rccm && "RCCM " + e.rccm, e.idnat && "Id. Nat. " + e.idnat, e.nif && "NIF " + e.nif].filter(Boolean); }
+function emMention(doc = "ce devis") {
+    return emOk() ? `Document établi sous la seule responsabilité de ${emName()}, titulaire de la ${emLic()} du logiciel MUPGLOBAL. MUPGLOBAL SARL, éditeur du logiciel, n'est pas partie à ${doc} ni à son exécution.`
+        : "VERSION DE DÉMONSTRATION – document sans valeur contractuelle.";
+}
+function emWa() { const t = String(EM.tel || "").replace(/[^\d]/g, ""); return t.length >= 9 ? t : ""; }
+function emSave() { try {
+    localStorage.setItem(EMKEY, JSON.stringify(EM));
+}
+catch (e) { } }
+function emForm(open) {
+    const dis = emOk() ? "" : " disabled";
+    return `<details class="card noprint"${open ? " open" : ""}><summary>Émetteur des devis<span class="sv">${esc(emName())}</span></summary><div class="dbody form" style="gap:10px">
+    <p class="small muted" style="margin:0">Les devis, rapports et présentations sont établis <b>au nom du titulaire de la licence</b>, qui en répond auprès de ses clients. Le nom vient de la clé de licence et ne peut pas être modifié ; complétez vos coordonnées légales.</p>
+    <div class="f"><label>Raison sociale (titulaire de la licence)</label><input value="${esc(emName())}" disabled></div>
+    ${EMF.map(([k, l]) => `<div class="f"><label for="em_${k}">${l}</label><input id="em_${k}" data-em="${k}" value="${esc(EM[k] || "")}"${dis}></div>`).join("")}
+  </div></details>`;
+}
+document.addEventListener("change", (e) => {
+    const el = e.target;
+    if (!el.dataset || !el.dataset.em)
+        return;
+    if (!emOk())
+        return;
+    EM[el.dataset.em] = String(el.value || "").trim().slice(0, 120);
+    emSave();
+    if (typeof render === "function")
+        render();
+});
 /* ---------- vue Devis ---------- */
 function vDev() {
     let lot = "", rows = "";
@@ -1337,7 +1379,10 @@ function vDev() {
         rows += `<tr class="${mod ? "mod" : ""}"><td><b>${l.n}.</b> ${esc(l.des)}${l.ref ? `<div class="small muted">${esc(l.ref)}</div>` : ""}</td><td class="num">${Number.isInteger(l.q) ? n0(l.q) : n1(l.q)}<div class="small muted">${esc(l.u)}</div></td><td class="num"><input data-price="${l.id}" inputmode="decimal" value="${String(+l.pu.toFixed(2)).replace(".", ",")}" aria-label="Prix unitaire ${esc(l.des)}"${DEMO ? " disabled" : ""}>${mod ? `<div><button type="button" class="chip" style="padding:2px 8px;margin-top:4px" data-preset="${l.id}">${l.cat ? "catalogue" : "défaut"}</button></div>` : ""}</td><td class="num"><b>${n0(l.mt)}</b></td></tr>`;
     });
     const t = S.taux;
-    return `<div class="card"><div class="h-sec" style="margin:0 0 8px"><h2>Devis estimatif</h2><span class="small muted">${esc(S.devise)}</span></div>
+    return `${emForm(emOk() && !emLines().length)}
+  <div class="card" style="background:linear-gradient(120deg,#0B5A2E,#0B4F7A);color:#fff;display:grid;gap:3px"><div class="eyebrow" style="color:#F5C542">Devis établi par</div><div style="font:800 19px/1.2 var(--display)">${esc(emName())}</div><div class="small" style="opacity:.9">${esc(emLines().join(" · ") || (emOk() ? "Coordonnées à compléter (Émetteur des devis)" : ""))}</div><div class="small" style="opacity:.85">Client : ${esc(S.client || "—")} · ${esc(S.nom)} · ${new Date().toLocaleDateString("fr-FR")}</div></div>
+  ${emOk() ? "" : chk(false, "VERSION DE DÉMONSTRATION – DEVIS SANS VALEUR")}
+  <div class="card"><div class="h-sec" style="margin:0 0 8px"><h2>Devis estimatif</h2><span class="small muted">${esc(S.devise)}</span></div>
    <p class="small muted" style="margin:0 0 8px">Quantités calculées automatiquement. Modifiez les <b>prix unitaires</b> selon vos fournisseurs (case dorée = prix modifié).</p>
    <div class="tbl"><table class="dvt"><colgroup><col><col style="width:50px"><col style="width:88px"><col style="width:66px"></colgroup><tr><th>Désignation</th><th>Qté</th><th>P.U.</th><th>Montant</th></tr>${rows}</table></div></div>
   <div class="card"><div class="dbody" style="padding:0">${kv("Total matériel", money(R.TOTMAT))}
@@ -1345,6 +1390,8 @@ function vDev() {
    ${kv("<b>Total hors taxes</b>", `<b>${money(R.TOTHT)}</b>`)}
    <div class="kv"><span>TVA <input data-p="taux.tva" data-pct="1" inputmode="decimal" value="${String(+(t.tva * 100).toFixed(2)).replace(".", ",")}" style="width:56px;min-height:32px;border:1px solid var(--line);border-radius:8px;text-align:right;background:var(--surface)"${DEMO ? " disabled" : ""}> %</span><span>${money(R.TVA)}</span></div>
    ${kv("<b>TOTAL TTC</b>", `<b style="font-size:18px">${money(R.TOTTTC)}</b>`)}${kv("dont investissement « eau » (lots 1, 2, 3, 5, 7)", money(R.INVP))}</div></div>
+  <div class="card" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px"><div style="border:1px dashed var(--line);border-radius:10px;padding:10px;min-height:70px">Pour ${esc(emName())}<br>signature et cachet</div><div style="border:1px dashed var(--line);border-radius:10px;padding:10px;min-height:70px">Bon pour accord – le client<br>date et signature</div></div>
+  <p class="small muted" style="text-align:center">${esc(emMention())}</p>
   <div class="grid2 noprint"><button type="button" class="btn gold" data-share="devis">Envoyer par WhatsApp</button><button type="button" class="btn ghost" data-print>Imprimer / PDF</button></div>`;
 }
 /* ---------- vue Rentabilité ---------- */
@@ -1461,12 +1508,12 @@ function vSynDom() {
 }
 function rapDom() {
     const st = R.ST, D = S.dom;
-    return [`*${COMPANY} – Étude de pompage solaire domestique*`, `Projet : ${S.nom}`, S.client ? `Client : ${S.client}` : "", `Site : ${S.site}`, "",
+    return [`*Étude de pompage solaire domestique – ${emName()}*`, `Projet : ${S.nom}`, S.client ? `Client : ${S.client}` : "", `Site : ${S.site}`, "",
         `• Besoin en eau : ${n0(R.VDOM * 1000)} litres par jour (${n0(R.PERS)} personnes${R.USAGES.some((u) => u.u !== "personnes" && u.nb > 0) ? ", animaux et jardin compris" : ""})`, `• Débit de pointe : ${n2(R.QP)} m³/h – HMT ${n0(R.HMT)} m`,
         `• ${R.POMPE}, posée à ${n0(R.PROF)} m`, `• ${R.VFD}`, `• Panneaux solaires : ${st.nmod} × ${S.mod.p} Wc = ${n0(R.PPV)} Wc`,
         `• Réservoir : ${R.RN > 1 ? R.RN + " × " : ""}${n0(R.RSIZE * 1000)} L sur tour de ${n1(D.hsup)} m (pression ${n1(R.PROBMIN)} à ${n1(R.PROBMAX)} bar)`, `• Distribution : ${n0(D.lres)} m de tuyau, ${D.nrob} robinet(s)${D.nborne ? `, ${D.nborne} borne(s)-fontaine(s)` : ""}`,
         "", `*Investissement TTC : ${money(R.TOTTTC)}*`, `Eau achetée évitée : ${money(R.EVIT)}/an – coût de l'eau produite ${n2(R.COUTBID)} ${S.devise} par bidon de 20 L`, `Retour sur investissement : ${R.PAYB === null ? "> 10 ans" : n1(R.PAYB) + " ans"}`,
-        "", `Contact ${COMPANY} : WhatsApp ${PHONE} – ${MAIL}`, DEMO ? "(Version de démonstration – exemple non contractuel)" : `(${licLabel()})`].filter((x) => x !== "").join("\n");
+        "", `Contact : ${emName()}${EM.tel ? " – " + EM.tel : ""}${EM.mail ? " – " + EM.mail : ""}`, `_${emMention("cette étude")}_`].filter((x) => x !== "").join("\n");
 }
 /* ---------- tableau de bord animé (page Résultats) ---------- */
 const ICO = {
@@ -1661,23 +1708,23 @@ function rapText() {
     if (R.DOM)
         return rapDom();
     const st = R.ST, res = S.res === "Oui";
-    return [`*${COMPANY} – Étude de pompage solaire*`, `Projet : ${S.nom}`, S.client ? `Client : ${S.client}` : "", `Site : ${S.site}`, "",
+    return [`*Étude de pompage solaire – ${emName()}*`, `Projet : ${S.nom}`, S.client ? `Client : ${S.client}` : "", `Site : ${S.site}`, "",
         `• Surface : ${n1(S.surf)} ha en ${S.mode.toLowerCase()}`, `• Besoin en eau (${R.MOISDIM}) : ${n1(R.VDIM)} m³/j – ${n0(R.VOLAN)} m³/an`, `• Débit de pointe : ${n1(R.QP)} m³/h – HMT ${n0(R.HMT)} m`,
         `• Motopompe immergée ${R.POUCES}″ ${kw(R.PMOT)} kW ${S.tmot}, posée à ${n0(R.PROF)} m`, `• Variateur solaire ${kw(R.PMOT)} kW (MPPT)`, `• Champ PV : ${st.nmod} × ${S.mod.p} Wc = ${n1(R.PPV / 1000)} kWc (${st.np} chaîne(s) de ${st.nser})`,
         `• Conduite PEHD DN${R.DN} – câble moteur ${R.SMOT} mm² – disjoncteur ${R.DJ} A`, res ? `• Bassin ${n0(R.BVU)} m³ + surpresseur ${kw(R.SPMOT)} kW (${R.SNMOD} modules)` : "",
         "", `*Investissement TTC : ${money(R.TOTTTC)}*`, `Économie par rapport au diesel : ${money(R.ECO)}/an – ${n0(R.GASOIL)} L de gasoil évités`, `Rentabilité : VAN ${money(R.VAN)} – TRI ${pc(R.TRI, 1)} – retour ${R.PAYB === null ? "> 10 ans" : n1(R.PAYB) + " ans"}`,
-        "", `Contact ${COMPANY} : WhatsApp ${PHONE} – ${MAIL}`, DEMO ? "(Version de démonstration – exemple non contractuel)" : `(${licLabel()})`].filter((x) => x !== "").join("\n").replace(/\n\n\n+/g, "\n\n");
+        "", `Contact : ${emName()}${EM.tel ? " – " + EM.tel : ""}${EM.mail ? " – " + EM.mail : ""}`, `_${emMention("cette étude")}_`].filter((x) => x !== "").join("\n").replace(/\n\n\n+/g, "\n\n");
 }
 function devText() {
-    let s = `*${COMPANY} – Devis estimatif pompage solaire*\nProjet : ${S.nom}\n`;
+    let s = `*DEVIS ESTIMATIF POMPAGE SOLAIRE – ${emName()}*\n${emLines().length ? emLines().join("\n") + "\n" : ""}${S.client ? "Client : " + S.client + "\n" : ""}Projet : ${S.nom}\nDate : ${new Date().toLocaleDateString("fr-FR")}\n`;
     let lot = "";
     R.DEVIS.filter((l) => l.q > 0).forEach((l) => { if (l.lot !== lot) {
         lot = l.lot;
         s += `\n*${lot}*\n`;
     } s += `${l.n}. ${l.des} – ${Number.isInteger(l.q) ? n0(l.q) : n1(l.q)} ${l.u} × ${n2(l.pu)} = ${n0(l.mt)}\n`; });
-    return s + `\nTotal matériel : ${money(R.TOTMAT)}\nMain-d'œuvre, transport, imprévus : ${money(R.MO + R.TR + R.IMPR)}\nTotal HT : ${money(R.TOTHT)}\nTVA : ${money(R.TVA)}\n*TOTAL TTC : ${money(R.TOTTTC)}*\n\nContact ${COMPANY} : WhatsApp ${PHONE}${DEMO ? "\n(Version de démonstration – exemple non contractuel)" : ""}`;
+    return s + `\nTotal matériel : ${money(R.TOTMAT)}\nMain-d'œuvre, transport, imprévus : ${money(R.MO + R.TR + R.IMPR)}\nTotal HT : ${money(R.TOTHT)}\nTVA : ${money(R.TVA)}\n*TOTAL TTC : ${money(R.TOTTTC)}*\n\nÉtabli par : ${emName()}${EM.tel ? " – " + EM.tel : ""}\n_${emMention()}_`;
 }
-function vRap() { return back("Rapport client") + `<div class="card"><pre style="white-space:pre-wrap;font:14px/1.5 var(--body);margin:0">${esc(rapText())}</pre></div><div class="grid2 noprint"><button type="button" class="btn gold" data-share="rap">Envoyer par WhatsApp</button><button type="button" class="btn ghost" data-copy="rap">Copier le texte</button></div>`; }
+function vRap() { return back("Rapport client") + emForm(false) + `<div class="card"><pre style="white-space:pre-wrap;font:14px/1.5 var(--body);margin:0">${esc(rapText())}</pre></div><div class="grid2 noprint"><button type="button" class="btn gold" data-share="rap">Envoyer par WhatsApp</button><button type="button" class="btn ghost" data-copy="rap">Copier le texte</button></div>`; }
 /* ---------- installation ---------- */
 let INSTALL_EVT = null;
 const IS_IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
@@ -1881,7 +1928,7 @@ document.addEventListener("click", async (e) => {
     if ("print" in d)
         return window.print();
     if ("share" in d)
-        return share(d.share === "devis" ? devText() : d.share === "rap" ? rapText() : `*Fiche d'exploitation – ${S.nom}*\nDébit attendu à midi : ${n1(R.QP)} m³/h\nVolume (${R.MOISDIM}) : ${n1(R.VDIM)} m³/j\nPression tête de forage : ${n2(R.PRESTETE)} bar\nNiveau statique : ${n1(S.ns)} m – rabattement attendu ${n1(R.RABP)} m\nCourant moteur : ${n1(R.IMOT)} A\nVoc chaîne : ${n1(R.ST.nser * S.mod.voc)} V\n${COMPANY} – ${PHONE}`);
+        return share(d.share === "devis" ? devText() : d.share === "rap" ? rapText() : `*Fiche d'exploitation – ${S.nom}*\nDébit attendu à midi : ${n1(R.QP)} m³/h\nVolume (${R.MOISDIM}) : ${n1(R.VDIM)} m³/j\nPression tête de forage : ${n2(R.PRESTETE)} bar\nNiveau statique : ${n1(S.ns)} m – rabattement attendu ${n1(R.RABP)} m\nCourant moteur : ${n1(R.IMOT)} A\nVoc chaîne : ${n1(R.ST.nser * S.mod.voc)} V\n${emName()}${EM.tel ? " – " + EM.tel : ""}`);
     if ("copy" in d)
         return copy(rapText());
     if (t.id === "btn-proj")
